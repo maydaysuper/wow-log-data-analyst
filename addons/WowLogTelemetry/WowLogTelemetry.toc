@@ -1,0 +1,8 @@
+## Interface: 120100
+## Title: WoW Log Telemetry
+## Notes: Records local FPS and Home/World latency for post-run analysis. No combat automation.
+## Author: WoW Log Data Analyst
+## Version: 0.4.0
+## SavedVariables: WowLogTelemetryDB
+
+WowLogTelemetry.lua

@@ -7,7 +7,7 @@ This is a native PySide6 World of Warcraft Retail combat-log/WCL analysis tool. 
 ## Roles
 
 - **ChatGPT in this project = implementation owner.** Make focused changes, add regression tests, run checks, and update the PR.
-- **GrokBot = reviewer / QA.** Review the actual PR diff and tests; do not rewrite the implementation branch.
+- **Independent reviewer bots are optional.** The implementation owner performs a concrete diff/test review before delivery; external review can be added later if the user requests it.
 - **Human user = product owner / merge authority.** Only the human decides merge/release acceptance.
 
 ## Invariants
@@ -32,6 +32,6 @@ PYTHONPATH=. pytest -q
 
 GitHub Actions must also pass the Windows portable build and frozen self-test.
 
-## Review contract
+## Self-review contract
 
-GrokBot should classify findings as **BLOCKER**, **IMPORTANT**, or **OPTIONAL**. Number every BLOCKER/IMPORTANT `FIX-001`, `FIX-002`, ... and include file/function, concrete failure mode, impact, expected fix, and regression-test need. `REVIEW: PASS` requires zero unresolved BLOCKER/IMPORTANT findings and green CI.
+Before delivery, review the actual diff for **BLOCKER**, **IMPORTANT**, and **OPTIONAL** findings. Every BLOCKER/IMPORTANT must identify file/function, concrete failure mode, impact, expected fix, and regression-test need. Delivery requires zero unresolved BLOCKER/IMPORTANT findings and green CI.
