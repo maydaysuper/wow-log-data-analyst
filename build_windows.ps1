@@ -12,7 +12,7 @@ function Invoke-Checked {
     )
     & $Command
     if ($LASTEXITCODE -ne 0) {
-        throw "$Step 失败，退出码：$LASTEXITCODE"
+        throw "$Step failed with exit code $LASTEXITCODE"
     }
 }
 
@@ -23,27 +23,28 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
     $PythonLauncher = "py"
     $PythonLauncherArgs = @("-3")
 } else {
-    throw "未检测到 Python 3。请安装 Python 3.11/3.12 x64，并勾选 Add Python to PATH。"
+    throw "Python 3 was not found. Install Python 3.11/3.12 x64 and add it to PATH."
 }
 
 if (-not (Test-Path $Venv)) {
     & $PythonLauncher @PythonLauncherArgs -m venv $Venv
+    if ($LASTEXITCODE -ne 0) { throw "Creating the build virtual environment failed." }
 }
 $Python = Join-Path $Venv "Scripts\python.exe"
 $PyInstaller = Join-Path $Venv "Scripts\pyinstaller.exe"
 
-Write-Host "[1/6] 更新构建工具..." -ForegroundColor Cyan
-Invoke-Checked { & $Python -m pip install --disable-pip-version-check --upgrade pip wheel setuptools } "更新构建工具"
+Write-Host "[1/6] Updating build tools..." -ForegroundColor Cyan
+Invoke-Checked { & $Python -m pip install --disable-pip-version-check --upgrade pip wheel setuptools } "Updating build tools"
 
-Write-Host "[2/6] 安装依赖..." -ForegroundColor Cyan
-Invoke-Checked { & $Python -m pip install --disable-pip-version-check -r requirements.txt "pyinstaller>=6.10,<7" pytest } "安装依赖"
+Write-Host "[2/6] Installing dependencies..." -ForegroundColor Cyan
+Invoke-Checked { & $Python -m pip install --disable-pip-version-check -r requirements.txt "pyinstaller>=6.10,<7" pytest } "Installing dependencies"
 
-Write-Host "[3/6] 运行编译检查和自动测试..." -ForegroundColor Cyan
+Write-Host "[3/6] Running compile checks and tests..." -ForegroundColor Cyan
 $env:PYTHONPATH = "."
-Invoke-Checked { & $Python -m compileall -q desktop_app.py core tests } "Python 编译检查"
-Invoke-Checked { & $Python -m pytest -q } "自动测试"
+Invoke-Checked { & $Python -m compileall -q desktop_app.py core tests } "Python compile check"
+Invoke-Checked { & $Python -m pytest -q } "Automated tests"
 
-Write-Host "[4/6] 构建 Windows 便携版（优先启动速度）..." -ForegroundColor Cyan
+Write-Host "[4/6] Building Windows portable app (onedir)..." -ForegroundColor Cyan
 Remove-Item -Recurse -Force build,dist -ErrorAction SilentlyContinue
 
 # onedir intentionally beats onefile for this Qt/Pandas application on Windows:
@@ -57,23 +58,24 @@ Invoke-Checked { & $PyInstaller `
   --add-data "addons;addons" `
   --add-data "VERSION;." `
   --exclude-module tkinter `
-  desktop_app.py } "PyInstaller 构建"
+  desktop_app.py } "PyInstaller build"
 
 $DistDir = Join-Path "dist" $AppName
 $Exe = Join-Path $DistDir "$AppName.exe"
-if (-not (Test-Path $Exe)) { throw "构建失败：没有找到 $Exe" }
+if (-not (Test-Path $Exe)) { throw "Build failed: executable not found at $Exe" }
 
-Write-Host "[5/6] 运行冻结 EXE 自检..." -ForegroundColor Cyan
-Invoke-Checked { & $Exe --self-test } "冻结 EXE 自检"
+Write-Host "[5/6] Running frozen EXE self-test..." -ForegroundColor Cyan
+Invoke-Checked { & $Exe --self-test } "Frozen EXE self-test"
 
-Write-Host "[6/6] 生成 Windows 测试压缩包..." -ForegroundColor Cyan
+Write-Host "[6/6] Creating Windows portable ZIP..." -ForegroundColor Cyan
 $Zip = "WoW-Log-Data-Analyst-v$Version-Windows-Portable.zip"
 Remove-Item $Zip -Force -ErrorAction SilentlyContinue
 Compress-Archive -Path "$DistDir\*" -DestinationPath $Zip -CompressionLevel Optimal
+if (-not (Test-Path $Zip)) { throw "Build failed: portable ZIP was not created." }
 
 Write-Host ""
-Write-Host "构建完成。" -ForegroundColor Green
+Write-Host "Build completed." -ForegroundColor Green
 Write-Host "EXE: $Exe" -ForegroundColor Green
-Write-Host "便携包: $Zip" -ForegroundColor Green
+Write-Host "Portable ZIP: $Zip" -ForegroundColor Green
 Write-Host ""
-Write-Host "测试时请保持 EXE 与 _internal 目录在一起，不要只复制单个 EXE。" -ForegroundColor Yellow
+Write-Host "Keep the EXE and _internal directory together when testing." -ForegroundColor Yellow
