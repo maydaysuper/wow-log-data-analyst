@@ -1,0 +1,46 @@
+name: release-desktop
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Windows portable EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build, test and frozen smoke test
+        shell: powershell
+        run: ./build_windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WoW-Log-Data-Analyst-Windows-${{ github.ref_name }}
+          path: WoW-Log-Data-Analyst-v*-Windows-Portable.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS DMG
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build, test and frozen smoke test
+        run: ./build_macos_app.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WoW-Log-Data-Analyst-macOS-${{ github.ref_name }}
+          path: WoW-Log-Data-Analyst-macOS.dmg
+          if-no-files-found: error
