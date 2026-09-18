@@ -246,7 +246,9 @@ def test_desktop_build_workflows_use_shared_hardened_scripts():
     assert "--onefile" not in release
     assert "--self-test" in win
     assert "function Invoke-Checked" in win
-    assert "PyInstaller 构建" in win
+    assert "& $PyInstaller" in win
+    assert "--onedir" in win
+    assert "--onefile" not in win
     assert "--self-test" in mac
     assert "windows-latest" in ci
     assert "upload-artifact@v4" in ci
