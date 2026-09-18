@@ -41,7 +41,7 @@ Invoke-Checked { & $Python -m pip install --disable-pip-version-check -r require
 
 Write-Host "[3/6] Running compile checks and tests..." -ForegroundColor Cyan
 $env:PYTHONPATH = "."
-Invoke-Checked { & $Python -m compileall -q desktop_app.py core tests } "Python compile check"
+Invoke-Checked { & $Python -m compileall -q desktop_entry.py desktop_app.py core tests } "Python compile check"
 Invoke-Checked { & $Python -m pytest -q } "Automated tests"
 
 Write-Host "[4/6] Building Windows portable app (onedir)..." -ForegroundColor Cyan
@@ -49,6 +49,8 @@ Remove-Item -Recurse -Force build,dist -ErrorAction SilentlyContinue
 
 # onedir intentionally beats onefile for this Qt/Pandas application on Windows:
 # onefile extracts a large runtime on every launch, while onedir starts directly.
+# desktop_entry.py wraps the legacy desktop module with deterministic WCL cleanup and
+# a packaged GUI smoke test that constructs the real MainWindow offline.
 Invoke-Checked { & $PyInstaller `
   --noconfirm --clean --windowed --onedir `
   --optimize 1 `
@@ -58,14 +60,14 @@ Invoke-Checked { & $PyInstaller `
   --add-data "addons;addons" `
   --add-data "VERSION;." `
   --exclude-module tkinter `
-  desktop_app.py } "PyInstaller build"
+  desktop_entry.py } "PyInstaller build"
 
 $DistDir = Join-Path "dist" $AppName
 $Exe = Join-Path $DistDir "$AppName.exe"
 if (-not (Test-Path $Exe)) { throw "Build failed: executable not found at $Exe" }
 
-Write-Host "[5/6] Running frozen EXE self-test..." -ForegroundColor Cyan
-Invoke-Checked { & $Exe --self-test } "Frozen EXE self-test"
+Write-Host "[5/6] Running frozen EXE GUI self-test..." -ForegroundColor Cyan
+Invoke-Checked { & $Exe --self-test } "Frozen EXE GUI self-test"
 
 Write-Host "[6/6] Creating Windows portable ZIP..." -ForegroundColor Cyan
 $Zip = "WoW-Log-Data-Analyst-v$Version-Windows-Portable.zip"
