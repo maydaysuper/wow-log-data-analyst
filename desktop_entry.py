@@ -77,6 +77,8 @@ class MainWindow(AppMainWindow):
         self._startup_started = False
         self._startup_error = ""
         self._startup_worker = None
+        self._busy_job_count = 0
+        self._busy_message = ""
         self._db_initializers = (
             ui.init_db,
             ui.init_knowledge_db,
@@ -127,30 +129,78 @@ class MainWindow(AppMainWindow):
         self.wcl_secret.clear()
         self._update_action_states()
 
+    def _refresh_busy_controls(self) -> None:
+        """Update action availability without ever replacing the whole app cursor.
+
+        The old UI used QApplication.setOverrideCursor(Qt.WaitCursor) for every
+        background task. A normal WCL scan can take tens of seconds, so the cursor
+        looked permanently stuck on an hourglass even though the GUI event loop was
+        healthy. Nested async jobs also made a simple boolean busy state unreliable.
+        Keep a counter instead and communicate progress through controls/status text.
+        """
+        active = int(getattr(self, "_busy_job_count", 0)) > 0
+        ready = bool(getattr(self, "_startup_ready", False))
+
+        if hasattr(self, "search_btn"):
+            self.search_btn.setEnabled(ready and (not active) and bool(self.identity_input.text().strip()))
+        if hasattr(self, "personal_sync_btn"):
+            self.personal_sync_btn.setEnabled(ready and not active)
+        if hasattr(self, "personal_refresh_btn"):
+            self.personal_refresh_btn.setEnabled(ready and not active)
+        if hasattr(self, "season_target_btn"):
+            self.season_target_btn.setEnabled(ready and (not active) and bool(getattr(self, "timed_runs", [])))
+        if hasattr(self, "timed_analyze_btn"):
+            try:
+                selected = bool(self._selected_timed_run_records())
+            except Exception:
+                selected = False
+            self.timed_analyze_btn.setEnabled(ready and (not active) and selected)
+        if hasattr(self, "local_ai_btn"):
+            self.local_ai_btn.setEnabled(ready and (not active) and bool(getattr(self, "local_runs", {})))
+
+    def _set_busy(self, busy: bool, message: str = ""):
+        """Track nested jobs and keep the normal mouse pointer responsive.
+
+        Background work is already off the GUI thread. A global wait cursor therefore
+        adds no safety and makes every button look frozen. Never push Qt.WaitCursor here.
+        """
+        if busy:
+            self._busy_job_count = int(getattr(self, "_busy_job_count", 0)) + 1
+            if message:
+                self._busy_message = message
+                self.statusBar().showMessage(message)
+        else:
+            self._busy_job_count = max(0, int(getattr(self, "_busy_job_count", 0)) - 1)
+            if self._busy_job_count == 0:
+                self._busy_message = ""
+                self.statusBar().showMessage("就绪")
+            elif message and message != "就绪":
+                self._busy_message = message
+                self.statusBar().showMessage(message)
+
+        # Defensive cleanup for a cursor left behind by an older code path/build.
+        try:
+            while QApplication.overrideCursor() is not None:
+                QApplication.restoreOverrideCursor()
+        except Exception:
+            pass
+        self._refresh_busy_controls()
+
     def _update_action_states(self):
         super()._update_action_states()
-        if not getattr(self, "_startup_ready", False):
-            if hasattr(self, "search_btn"):
-                self.search_btn.setEnabled(False)
-            if hasattr(self, "timed_analyze_btn"):
-                self.timed_analyze_btn.setEnabled(False)
-            if hasattr(self, "local_ai_btn"):
-                self.local_ai_btn.setEnabled(False)
+        self._refresh_busy_controls()
+
+    def _timed_selection_changed(self):
+        super()._timed_selection_changed()
+        self._refresh_busy_controls()
 
     def _set_startup_controls_enabled(self, ready: bool) -> None:
         self._startup_ready = bool(ready)
-        if hasattr(self, "personal_sync_btn"):
-            self.personal_sync_btn.setEnabled(ready)
-        if hasattr(self, "personal_refresh_btn"):
-            self.personal_refresh_btn.setEnabled(ready)
-        if hasattr(self, "season_target_btn"):
-            self.season_target_btn.setEnabled(ready and bool(getattr(self, "timed_runs", [])))
-        if hasattr(self, "local_ai_btn"):
-            self.local_ai_btn.setEnabled(ready and bool(getattr(self, "local_runs", {})))
         if ready:
             super()._update_action_states()
             if hasattr(self, "_timed_selection_changed"):
-                self._timed_selection_changed()
+                super()._timed_selection_changed()
+        self._refresh_busy_controls()
 
     def _apply_windows_layout_hardening(self) -> None:
         """Keep the UI inside the usable screen at 125%/150% Windows scaling."""
@@ -286,6 +336,19 @@ def packaged_self_test() -> int:
             return 13
         if getattr(win, "thread_pool", None) is None:
             return 14
+
+        # Busy-state regression check: async work must not turn the whole application
+        # cursor into an hourglass, and nested accounting must return to zero.
+        win._set_startup_controls_enabled(True)
+        win._set_busy(True, "self-test busy")
+        if QApplication.overrideCursor() is not None:
+            return 16
+        if int(getattr(win, "_busy_job_count", -1)) != 1:
+            return 17
+        win._set_busy(False, "就绪")
+        if int(getattr(win, "_busy_job_count", -1)) != 0:
+            return 18
+
         win.show()
         app.processEvents()
         if not win.isVisible():
