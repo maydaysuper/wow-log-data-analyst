@@ -4,7 +4,7 @@ on:
   push:
     branches: [chatgpt/1-v018-review-hardening]
     paths:
-      - '.bootstrap/**'
+      - '.bootstrap/READY'
       - '.github/workflows/bootstrap-source.yml'
 
 permissions:
@@ -22,8 +22,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 -d .bootstrap/chunk-01.b64 > /tmp/v018-code.tar.xz
-          tar -xJf /tmp/v018-code.tar.xz -C .
+          cat .bootstrap/part-*.b64 | base64 -d > /tmp/v018-source.tar.xz
+          echo '3e328a523b5df8f5f8881b27d82072c543dd3b393872f77406218f9bcd451380  /tmp/v018-source.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/v018-source.tar.xz -C .
           rm -rf .bootstrap
           rm -f .github/workflows/bootstrap-source.yml
           git config user.name 'github-actions[bot]'
